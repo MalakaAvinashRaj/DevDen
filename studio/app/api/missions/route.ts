@@ -27,13 +27,17 @@ export async function POST(req: NextRequest) {
   const slug = mission.folder.replace(`${mission.id}-`, '')
 
   spawnAgent(
-    'cpe',
+    `cpe-${mission.id}`,
     'CPE',
-    `New mission intake required. Read .agents/cpe/CLAUDE.md for your full protocol. ` +
+    `MISSION INTAKE — skip orientation reads, go straight to action. ` +
     `Mission: ${mission.id} — ${mission.name}. ` +
-    `Client brief is at missions/intake/CLIENT-BRIEF-${num}-${slug}.md. ` +
-    `Mission folder is at missions/active/${mission.folder}/. ` +
-    `Your job: read the brief, write MISSION.md updates if needed, populate missions/active/${mission.folder}/TASK-REGISTRY.md with concrete tasks assigned to the right agents, update HEARTBEAT.md, then write a handoff file at missions/active/${mission.folder}/handoffs/HANDOFF-cpe-intake.md summarising what you've set up and what each agent should do next.`
+    `The folder missions/active/${mission.folder}/ already exists with MISSION.md and TASK-REGISTRY.md scaffolded. ` +
+    `Do these steps in order with no extra reads: ` +
+    `1) Read missions/intake/CLIENT-BRIEF-${num}-${slug}.md. ` +
+    `2) Write concrete tasks into missions/active/${mission.folder}/TASK-REGISTRY.md using the ### T-NNN format (assignee: architect|software-engineer|ui-ux|qa, status: todo). ` +
+    `3) Write missions/active/${mission.folder}/handoffs/HANDOFF-cpe-intake.md telling Architect what to design. ` +
+    `4) Append one JSON line to missions/active/${mission.folder}/ACTIVITY.md: {"agent_id":"cpe","event":"intake complete","detail":"tasks written, architect handed off","created_at":"<ISO timestamp>"}. ` +
+    `Do not read SOUL.md, AGENTS.md, HEARTBEAT.md, or any template files — all context is in this prompt and the client brief.`
   )
 
   return NextResponse.json(mission, { status: 201 })

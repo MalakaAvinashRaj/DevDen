@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useCanvasControls } from '@/lib/useCanvasControls'
 import AgentNode from './AgentNode'
 import CanvasControls from './CanvasControls'
@@ -32,6 +32,57 @@ export default function Canvas() {
 
   const isPanning = useRef(false)
   const lastMouse = useRef({ x: 0, y: 0 })
+
+  // ── Viewport size (drives cluster box + default agent positions) ──
+  const [vpSize, setVpSize] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+    const update = () => setVpSize({ w: el.clientWidth, h: el.clientHeight })
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Canvas layout constants — 10% pad, mapped from viewport → canvas space
+  // Initial transform: x=0, y=0, zoom=0.85 (from useCanvasControls init)
+  const INIT_ZOOM = 0.85
+  const PAD = 0.1
+  const NODE_W = 224
+  const NODE_H = 130
+
+  const clusterBox = useMemo(() => {
+    if (vpSize.w === 0) return { left: 40, top: 40, width: 1200, height: 560 }
+    const w = vpSize.w / INIT_ZOOM
+    const h = vpSize.h / INIT_ZOOM
+    return {
+      left:   w * PAD,
+      top:    h * PAD,
+      width:  w * (1 - 2 * PAD),
+      height: h * (1 - 2 * PAD),
+    }
+  }, [vpSize])
+
+  // Default positions: CPE centered top, SE+QA centered bottom
+  const computedDefaults = useMemo(() => {
+    const cx  = clusterBox.left + clusterBox.width / 2
+    const GAP = 32
+    const topY    = clusterBox.top + 60
+    const bottomY = clusterBox.top + clusterBox.height - NODE_H - 60
+    return {
+      'cpe':               { x: cx - ORG_NODE_W / 2,           y: topY },
+      'software-engineer': { x: cx - NODE_W - GAP / 2,     y: bottomY },
+      'qa':                { x: cx + GAP / 2,              y: bottomY },
+    }
+  }, [clusterBox])
+
+  // Server-side hardcoded defaults — if agent pos matches these, replace with computed
+  const SERVER_DEFAULTS: Record<string, { x: number; y: number }> = {
+    'cpe':               { x: 500, y: 60  },
+    'software-engineer': { x: 200, y: 360 },
+    'qa':                { x: 760, y: 360 },
+  }
 
   async function fetchAll() {
     const [agents, tasks, missions, supervisor] = await Promise.all([
@@ -104,7 +155,7 @@ export default function Canvas() {
     await fetch(`/api/agents/${id}/wake`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: '{}',
+      body: JSON.stringify(selectedMissionId ? { missionId: selectedMissionId } : {}),
     })
   }
 
@@ -118,35 +169,31 @@ export default function Canvas() {
   }
 
   function fitToView() {
-    actions.setTransform({ x: 80, y: 60, zoom: 0.9 })
+    actions.setTransform({ x: 0, y: 0, zoom: INIT_ZOOM })
   }
 
   function tidyLayout() {
-    const ORDER = ['software-engineer', 'qa']
-    const NODE_W = 224, GAP = 24, ROW_Y = 360, startX = 60
-    const rowTotal = ORDER.length * NODE_W + (ORDER.length - 1) * GAP
-    const cpex = startX + rowTotal / 2 - NODE_W / 2
-    const updates = [
-      { id: 'cpe', x: cpex, y: 60 },
-      ...ORDER.map((id, i) => ({ id, x: startX + i * (NODE_W + GAP), y: ROW_Y })),
-    ]
-    updates.forEach(u => moveAgent(u.id, u.x, u.y))
+    Object.entries(computedDefaults).forEach(([id, pos]) => moveAgent(id, pos.x, pos.y))
   }
 
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({})
   const isDragging = useRef<string | null>(null)
 
   useEffect(() => {
+    if (vpSize.w === 0) return
     setPositions(prev => {
       const next = { ...prev }
       data.agents.forEach(a => {
         if (isDragging.current !== a.id) {
-          next[a.id] = { x: a.canvas_x ?? 100, y: a.canvas_y ?? 100 }
+          const sd = SERVER_DEFAULTS[a.id]
+          const isAtServerDefault = sd && a.canvas_x === sd.x && a.canvas_y === sd.y
+          const cd = computedDefaults[a.id as keyof typeof computedDefaults]
+          next[a.id] = isAtServerDefault && cd ? cd : { x: a.canvas_x ?? 100, y: a.canvas_y ?? 100 }
         }
       })
       return next
     })
-  }, [data.agents])
+  }, [data.agents, vpSize, computedDefaults])
 
   function handleDragMove(id: string, x: number, y: number) {
     isDragging.current = id
@@ -217,7 +264,7 @@ export default function Canvas() {
                   ? 'border-blue-300 bg-blue-50/20'
                   : 'border-neutral-200 bg-neutral-50/30 opacity-20'
               }`}
-              style={{ left: 20, top: 20, width: 1360, height: 580 }}
+              style={{ left: clusterBox.left, top: clusterBox.top, width: clusterBox.width, height: clusterBox.height }}
             >
               <span className={`absolute top-3 left-4 text-sm font-mono transition-colors ${active ? 'text-blue-500 font-semibold' : 'text-neutral-400'}`}>
                 {m.id} · {m.phase}
@@ -229,8 +276,8 @@ export default function Canvas() {
         {/* Org tree connector lines */}
         <OrgLines agents={data.agents} positions={positions} />
 
-        {/* Agent nodes — background agents (eval, architect, ui-ux) are excluded */}
-        {data.agents.filter(a => !['eval', 'architect', 'ui-ux'].includes(a.id)).map(agent => (
+        {/* Agent nodes — eval and ui-ux are background-only; architect is visible */}
+        {data.agents.filter(a => !['eval', 'ui-ux'].includes(a.id)).map(agent => (
           <AgentNode
             key={agent.id}
             agent={agent}
@@ -240,7 +287,7 @@ export default function Canvas() {
             onDragMove={handleDragMove}
             pos={positions[agent.id]}
             scale={transform.zoom}
-            running={runningAgents.includes(agent.id)}
+            running={runningAgents.some(r => r === agent.id || r.startsWith(`${agent.id}-MISSION-`))}
           />
         ))}
       </div>
@@ -317,7 +364,15 @@ export default function Canvas() {
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isCurrent ? 'bg-blue-500' : 'bg-neutral-300'}`} />
                         <div className="min-w-0 flex-1">
                           <p className={`text-sm font-medium truncate ${isCurrent ? 'text-blue-700' : 'text-neutral-700'}`}>{m.id}</p>
-                          <p className="text-xs text-neutral-400 truncate">{m.phase} · {activeTasks.length} active tasks</p>
+                          {(() => {
+                          const cpeRunning = runningAgents.some(r => r === `cpe-${m.id}` || r.startsWith(`cpe-${m.id}-`))
+                          return cpeRunning
+                            ? <p className="text-xs text-blue-400 truncate flex items-center gap-1">
+                                <svg className="animate-spin flex-shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                CPE working…
+                              </p>
+                            : <p className="text-xs text-neutral-400 truncate">{m.phase} · {activeTasks.length} active tasks</p>
+                        })()}
                         </div>
                         {isCurrent && (
                           <svg className="flex-shrink-0 text-blue-500" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -430,18 +485,18 @@ export default function Canvas() {
 }
 
 // ── Org tree connector lines ───────────────────────────────────
-const NODE_W = 224
-const NODE_H = 130
+const ORG_NODE_W = 224
+const ORG_NODE_H = 130
 
 function OrgLines({ agents, positions }: { agents: Agent[]; positions: Record<string, { x: number; y: number }> }) {
   const cpe = agents.find(a => a.id === 'cpe')
   if (!cpe) return null
 
-  const CANVAS_AGENTS = ['cpe', 'software-engineer', 'qa']
+  const CANVAS_AGENTS = ['cpe', 'architect', 'software-engineer', 'qa']
   const cpePos  = positions['cpe'] ?? { x: cpe.canvas_x ?? 100, y: cpe.canvas_y ?? 100 }
   const others  = agents.filter(a => CANVAS_AGENTS.includes(a.id) && a.id !== 'cpe')
-  const cpeCx   = cpePos.x + NODE_W / 2
-  const cpeBottom = cpePos.y + NODE_H
+  const cpeCx   = cpePos.x + ORG_NODE_W / 2
+  const cpeBottom = cpePos.y + ORG_NODE_H
 
   return (
     <svg
@@ -450,7 +505,7 @@ function OrgLines({ agents, positions }: { agents: Agent[]; positions: Record<st
     >
       {others.map(agent => {
         const p    = positions[agent.id] ?? { x: agent.canvas_x ?? 100, y: agent.canvas_y ?? 100 }
-        const ax   = p.x + NODE_W / 2
+        const ax   = p.x + ORG_NODE_W / 2
         const ay   = p.y
         const midY = (cpeBottom + ay) / 2
         return (

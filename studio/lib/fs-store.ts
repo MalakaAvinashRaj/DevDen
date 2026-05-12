@@ -82,7 +82,7 @@ const DEFAULT_POSITIONS: Record<string, { x: number; y: number }> = {
   'cpe':               { x: 500, y: 60  },
   'software-engineer': { x: 200, y: 360 },
   'qa':                { x: 760, y: 360 },
-  'architect':         { x: 100, y: 200 },
+  'architect':         { x: 480, y: 240 },
   'ui-ux':             { x: 900, y: 200 },
   'eval':              { x: 500, y: 500 },
 }

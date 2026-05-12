@@ -33,7 +33,9 @@ const PRIORITY_COLOR: Record<string, string> = {
 }
 
 function timeAgo(dt: string) {
-  const diff = (Date.now() - new Date(dt + 'Z').getTime()) / 1000
+  const normalized = dt.endsWith('Z') ? dt : dt + 'Z'
+  const diff = (Date.now() - new Date(normalized).getTime()) / 1000
+  if (!isFinite(diff) || diff < 0) return 'just now'
   if (diff < 60)    return `${Math.floor(diff)}s ago`
   if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
@@ -229,7 +231,7 @@ export default function DetailPanel({ open, defaultTab = 'tasks', missionId, onC
               }
 
               return visibleAgents.map(agent => {
-                const isRunning  = running.includes(agent.id)
+                const isRunning  = running.some(r => r === agent.id || r.startsWith(`${agent.id}-MISSION-`))
                 const agentTasks = scopedTasks.filter(t =>
                   t.assignee === agent.id && ['todo', 'in-progress', 'review'].includes(t.status)
                 )

@@ -6,7 +6,7 @@ export async function GET() {
   const running = getRunning()
   const agents = getAgents().map(a => ({
     ...a,
-    status: running.includes(a.id) ? 'in-progress' : a.status,
+    status: running.some(r => r === a.id || r.startsWith(`${a.id}-MISSION-`)) ? 'in-progress' : a.status,
   }))
   return NextResponse.json(agents)
 }
