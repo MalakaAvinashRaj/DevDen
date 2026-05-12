@@ -3,6 +3,12 @@ import path from 'path'
 import { registerHandler, startQueue, stopQueue } from './job-queue'
 import { startFsSync, stopFsSync, onSpawn, markSpawnProcessed, type SpawnPayload } from './fs-sync'
 import { updateJobStatus, logActivity, claimNextJob } from './db-store'
+import { pushEvent, startHeartbeat } from './sse'
+
+function emit(data: { mission_id: number; role: string; event: string; detail?: string }): void {
+  logActivity(data)
+  pushEvent({ type: 'activity', ...data })
+}
 
 const MISSIONS_DIR = path.join(process.cwd(), '..', 'missions', 'active')
 const AGENTS_DIR = path.join(process.cwd(), '..', '.agents')
@@ -48,7 +54,7 @@ function spawnHermes(payload: SpawnPayload, jobId: number): void {
   )
 
   updateJobStatus(jobId, 'running', child.pid)
-  logActivity({
+  emit({
     mission_id: payload.missionId,
     role: 'supervisor',
     event: 'agent_spawned',
@@ -60,7 +66,7 @@ function spawnHermes(payload: SpawnPayload, jobId: number): void {
   child.on('exit', (code) => {
     const status = code === 0 ? 'done' : 'failed'
     updateJobStatus(jobId, status)
-    logActivity({
+    emit({
       mission_id: payload.missionId,
       role: 'supervisor',
       event: 'agent_exit',
@@ -69,7 +75,7 @@ function spawnHermes(payload: SpawnPayload, jobId: number): void {
   })
 
   child.on('error', (err) => {
-    logActivity({
+    emit({
       mission_id: payload.missionId,
       role: 'supervisor',
       event: 'agent_error',
@@ -91,7 +97,7 @@ export function startSupervisor(): void {
   registerHandler(async (job) => {
     const payload = _pendingSpawns.get(job.id)
     if (!payload) {
-      logActivity({
+      emit({
         mission_id: job.mission_id,
         role: 'supervisor',
         event: 'job_skipped',

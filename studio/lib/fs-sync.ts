@@ -1,6 +1,7 @@
 import chokidar from 'chokidar'
 import fs from 'fs'
 import path from 'path'
+import { pushEvent } from './sse'
 import {
   logActivity,
   updateTaskStatus,
@@ -14,6 +15,11 @@ import {
 const MISSIONS_DIR = path.join(process.cwd(), '..', 'missions', 'active')
 
 let _watcher: ReturnType<typeof chokidar.watch> | null = null
+
+function emit(data: { mission_id: number; role: string; event: string; detail?: string }): void {
+  logActivity(data)
+  pushEvent({ type: 'activity', ...data })
+}
 
 // Called by supervisor after a SPAWN file is processed so we don't re-queue it
 const _processedSpawns = new Set<string>()
@@ -105,7 +111,7 @@ function handleNewFile(filePath: string): void {
     const role = (parsed['role'] ?? 'worker') as 'worker' | 'validator'
 
     createJob({ role, mission_id: missionId, feature: parsed['feature'] ?? parsed['milestone'] })
-    logActivity({
+    emit({
       mission_id: missionId,
       role: 'supervisor',
       event: 'spawn_detected',
@@ -133,23 +139,11 @@ function handleNewFile(filePath: string): void {
     const featureMatch = basename.match(/^WORKER-(.+)-done\.md$/)
     const feature = featureMatch?.[1] ?? basename
 
-    logActivity({
-      mission_id: missionId,
-      role: 'worker',
-      event: 'handoff_received',
-      detail: `feature: ${feature}`,
-    })
+    emit({ mission_id: missionId, role: 'worker', event: 'handoff_received', detail: `feature: ${feature}` })
 
-    // Mark any matching task done
     const followedSpec = /## 5\. Did It Follow the Spec\s+Yes/i.test(content)
     if (followedSpec) {
-      // db-store doesn't expose findTaskByTitle so we log and let orchestrator update tasks
-      logActivity({
-        mission_id: missionId,
-        role: 'supervisor',
-        event: 'task_complete',
-        detail: feature,
-      })
+      emit({ mission_id: missionId, role: 'supervisor', event: 'task_complete', detail: feature })
     }
     return
   }
@@ -173,7 +167,7 @@ function handleNewFile(filePath: string): void {
 
     createValidation({ mission_id: missionId, milestone, mode, verdict, score: score ?? undefined, ndjson_path: ndjsonPath ?? undefined })
 
-    logActivity({
+    emit({
       mission_id: missionId,
       role: 'validator',
       event: 'verdict',

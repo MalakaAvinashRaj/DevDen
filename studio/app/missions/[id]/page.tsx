@@ -52,8 +52,19 @@ export default function MissionDetailPage() {
 
   useEffect(() => {
     load()
-    const t = setInterval(load, 5000)
-    return () => clearInterval(t)
+
+    // SSE: re-fetch whenever the server pushes an event for this mission
+    const es = new EventSource('/api/stream')
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (!data.mission_id || data.mission_id === id) load()
+      } catch { /* ignore */ }
+    }
+
+    // Fallback poll (catches anything SSE misses)
+    const t = setInterval(load, 15000)
+    return () => { es.close(); clearInterval(t) }
   }, [id])
 
   if (loading) return <div className="text-xs text-zinc-600 text-center py-24">Loading…</div>
