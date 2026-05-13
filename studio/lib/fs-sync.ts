@@ -30,7 +30,7 @@ export function markSpawnProcessed(filePath: string): void {
 export type SpawnPayload = {
   filePath: string
   mission: string
-  role: 'worker' | 'validator'
+  role: 'orchestrator' | 'worker' | 'validator'
   feature?: string
   spec?: string
   milestone?: string
@@ -108,7 +108,7 @@ function handleNewFile(filePath: string): void {
     if (!missionId) return
     const content = fs.readFileSync(filePath, 'utf-8')
     const parsed = parseSpawnFile(content)
-    const role = (parsed['role'] ?? 'worker') as 'worker' | 'validator'
+    const role = (parsed['role'] ?? 'worker') as 'orchestrator' | 'worker' | 'validator'
 
     createJob({ role, mission_id: missionId, feature: parsed['feature'] ?? parsed['milestone'] })
     emit({

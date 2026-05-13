@@ -84,6 +84,19 @@ export async function POST(req: NextRequest) {
 
     scaffoldMission(folder, { name: name.trim(), brief, goal })
 
+    // Auto-spawn the Orchestrator by writing a SPAWN handoff file.
+    // The supervisor's chokidar watcher picks this up and queues the job.
+    const spawnContent = [
+      `MISSION: ${folder}`,
+      `ROLE: orchestrator`,
+    ].join('\n') + '\n'
+
+    const ts = Date.now()
+    fs.writeFileSync(
+      path.join(MISSIONS_DIR, folder, 'handoffs', `SPAWN-orchestrator-${ts}.md`),
+      spawnContent
+    )
+
     return NextResponse.json({ mission: { ...mission, folder } }, { status: 201 })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
