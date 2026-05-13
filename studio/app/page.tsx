@@ -31,23 +31,26 @@ export default function DashboardPage() {
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-lg font-semibold text-zinc-100">Missions</h1>
-          <p className="text-xs text-zinc-500 mt-1">Each mission is a product built by your factory.</p>
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>Missions</h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--muted-fg)' }}>Each mission is a product built by your factory.</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors"
+          className="px-4 py-2 text-white text-xs font-medium rounded-lg transition-colors"
+          style={{ background: 'var(--accent)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'var(--accent)')}
         >
           + New Mission
         </button>
       </div>
 
       {loading ? (
-        <div className="text-xs text-zinc-600 py-16 text-center">Loading…</div>
+        <div className="text-xs py-16 text-center" style={{ color: 'var(--subtle)' }}>Loading…</div>
       ) : missions.length === 0 ? (
         <div className="text-center py-24">
-          <p className="text-zinc-600 text-sm mb-2">No missions yet.</p>
-          <p className="text-zinc-700 text-xs">Create your first mission to start the factory.</p>
+          <p className="text-sm mb-2" style={{ color: 'var(--muted-fg)' }}>No missions yet.</p>
+          <p className="text-xs" style={{ color: 'var(--subtle)' }}>Create your first mission to start the factory.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
