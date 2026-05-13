@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  serverExternalPackages: ['fs', 'path', 'os', 'child_process'],
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
