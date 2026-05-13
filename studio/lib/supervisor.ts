@@ -19,6 +19,16 @@ const _pendingSpawns = new Map<number, SpawnPayload>()
 function buildPrompt(payload: SpawnPayload): string {
   const protocolsPath = path.join(AGENTS_DIR, payload.role, 'CLAUDE.md')
 
+  if (payload.role === 'orchestrator') {
+    return [
+      `You are the Orchestrator agent in the DevDen factory.`,
+      `Mission: ${payload.mission}`,
+      `Operating protocols: ${protocolsPath}`,
+      `Read MISSION.md, then execute your full scoping sequence as described in your protocols.`,
+      `Start with Step 1: query GBrain, then scope, write the VALIDATION-CONTRACT.md, break into milestones, and spawn Workers.`,
+    ].join('\n')
+  }
+
   if (payload.role === 'worker') {
     return [
       `You are a Worker agent in the DevDen factory.`,
