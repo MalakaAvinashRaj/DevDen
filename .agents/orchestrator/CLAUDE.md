@@ -49,3 +49,19 @@ ROLE: validator
 | building → validating | All milestone features have Worker done handoffs |
 | validating → building | Validator issues FAIL — create follow-up feature specs |
 | validating → shipped | Validator issues PASS on final milestone |
+
+## GBrain Usage
+
+### At mission start (before scoping)
+```bash
+gbrain query "similar missions or stack decisions: <topic>"
+gbrain search "<technology or domain keywords>"
+```
+
+### After ship (import artifacts)
+```bash
+gbrain put mission-NNN-<name>-summary < missions/active/MISSION-NNN-name/MISSION.md
+gbrain put mission-NNN-<name>-contract < missions/active/MISSION-NNN-name/VALIDATION-CONTRACT.md
+```
+
+GBrain binary: `~/.bun/bin/gbrain` (PGLite local, always available)
